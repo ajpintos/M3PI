@@ -38,12 +38,8 @@ JSON de evaluación:"""
 _prompt = ChatPromptTemplate.from_template(_JUDGE_TEMPLATE)
 
 
-def evaluate_response(query: str, answer: str, trace_id: str) -> dict[str, float]:
-    """
-    Evalúa la respuesta y registra los scores en Langfuse v3.
-
-    Devuelve el diccionario de scores: {"relevance": X, "completeness": Y, "accuracy": Z, "overall": W}
-    """
+def compute_scores(query: str, answer: str) -> dict[str, float]:
+    """Llama al LLM-as-judge y devuelve los scores SIN registrarlos."""
     chain = _prompt | get_llm() | StrOutputParser()
 
     raw = chain.invoke({"query": query, "answer": answer}).strip()
@@ -59,16 +55,33 @@ def evaluate_response(query: str, answer: str, trace_id: str) -> dict[str, float
         "accuracy": float(scores_raw.get("accuracy", 5)),
     }
     scores["overall"] = round(sum(scores.values()) / 3, 2)
+    return scores
 
+
+def register_scores(scores: dict[str, float]) -> None:
+    """Registra los scores en el span/trace activo de Langfuse v3.
+    Debe llamarse DENTRO del contexto de un @observe o start_as_current_observation."""
     langfuse = get_client()
     for name, value in scores.items():
-        langfuse.create_score(
-            trace_id=trace_id,
-            name=name,
-            value=value,
-            data_type="NUMERIC",
-            comment=f"LLM-as-judge score for '{name}'",
-        )
-    langfuse.flush()
+        # Probamos los métodos disponibles en distintas variantes de v3
+        for method_name in ("score_current_span", "score_current_trace", "score"):
+            method = getattr(langfuse, method_name, None)
+            if callable(method):
+                try:
+                    method(
+                        name=name,
+                        value=value,
+                        data_type="NUMERIC",
+                        comment=f"LLM-as-judge score for '{name}'",
+                    )
+                    break
+                except Exception:
+                    continue
 
+
+def evaluate_response(query: str, answer: str, trace_id: str | None = None) -> dict[str, float]:
+    """API legacy: calcula y registra los scores. Debe llamarse desde un contexto con span activo."""
+    scores = compute_scores(query, answer)
+    register_scores(scores)
+    get_client().flush()
     return scores

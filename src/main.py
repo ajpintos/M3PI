@@ -15,48 +15,59 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from langfuse import get_client, observe
+
 from src.graph import app
-from src.agents.evaluator import evaluate_response
-from src.observability import build_callback, get_langfuse_client, new_session_id
+from src.agents.evaluator import compute_scores, register_scores
+from src.observability import build_callback, new_session_id
+
+
+@observe(name="multi-agent-routing")
+def _invoke_graph(query: str, session_id: str, callback, evaluate: bool = True) -> dict:
+    """Ejecuta el grafo dentro de un trace de Langfuse.
+
+    El scoring se hace ADENTRO del contexto del @observe porque en esta versión
+    de langfuse v3, score_current_span() requiere un span activo en el contexto.
+    """
+    langfuse = get_client()
+
+    result: dict = app.invoke(
+        {"query": query, "intent": "", "answer": "", "domain_used": ""},
+        config={"callbacks": [callback]},
+    )
+
+    # Enriquecer el span con metadata para depurar en Langfuse
+    try:
+        langfuse.update_current_span(
+            input={"query": query},
+            output={"answer": result.get("answer"), "intent": result.get("intent")},
+            metadata={
+                "session_id": session_id,
+                "intent": result.get("intent"),
+                "domain_used": result.get("domain_used"),
+                "tags": ["routing", result.get("intent", "unknown").lower()],
+            },
+        )
+    except Exception as exc:
+        print(f"  [trace] No se pudo enriquecer el span: {exc}", file=sys.stderr)
+
+    # Evaluador (BONUS): calcula scores y los registra en el span activo
+    if evaluate:
+        try:
+            scores = compute_scores(query=result["query"], answer=result["answer"])
+            register_scores(scores)
+            result["_scores"] = scores
+        except Exception as exc:
+            print(f"  [evaluator] Error al evaluar: {exc}", file=sys.stderr)
+
+    return result
 
 
 def run_query(query: str, session_id: str, evaluate: bool = True) -> dict:
     callback = build_callback()
-    langfuse = get_langfuse_client()
+    langfuse = get_client()
 
-    # En Langfuse v3 envolvemos la invocación en un span para obtener trace_id
-    # y enriquecer el trace con metadata útil (session, tags, query original).
-    with langfuse.start_as_current_span(
-        name="multi-agent-routing",
-        input={"query": query},
-    ) as span:
-        result: dict = app.invoke(
-            {"query": query, "intent": "", "answer": "", "domain_used": ""},
-            config={"callbacks": [callback]},
-        )
-
-        span.update_trace(
-            session_id=session_id,
-            tags=["routing", result.get("intent", "unknown").lower()],
-            metadata={
-                "query": query,
-                "intent": result.get("intent"),
-                "domain_used": result.get("domain_used"),
-            },
-            output={"answer": result.get("answer"), "intent": result.get("intent")},
-        )
-
-        trace_id = span.trace_id
-
-    if evaluate and trace_id:
-        try:
-            evaluate_response(
-                query=result["query"],
-                answer=result["answer"],
-                trace_id=trace_id,
-            )
-        except Exception as exc:
-            print(f"  [evaluator] Error al evaluar: {exc}", file=sys.stderr)
+    result = _invoke_graph(query, session_id, callback, evaluate=evaluate)
 
     langfuse.flush()
     return result
