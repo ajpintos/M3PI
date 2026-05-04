@@ -1,0 +1,58 @@
+[
+  {
+    "query": "¿Cuántos días de vacaciones tengo al año?",
+    "expected_intent": "HR"
+  },
+  {
+    "query": "¿Cuántas semanas de licencia de maternidad tengo derecho?",
+    "expected_intent": "HR"
+  },
+  {
+    "query": "¿Cómo funciona el proceso de evaluación de desempeño?",
+    "expected_intent": "HR"
+  },
+  {
+    "query": "No puedo conectarme a la VPN desde casa, ¿qué hago?",
+    "expected_intent": "TECH"
+  },
+  {
+    "query": "Olvidé mi contraseña de Active Directory y no puedo entrar al sistema",
+    "expected_intent": "TECH"
+  },
+  {
+    "query": "¿Cómo instalo Cisco AnyConnect en mi Mac?",
+    "expected_intent": "TECH"
+  },
+  {
+    "query": "¿Cómo reporto un gasto de viaje de negocios?",
+    "expected_intent": "FINANCE"
+  },
+  {
+    "query": "¿Cuál es el límite de gasto en hoteles cuando viajo por trabajo?",
+    "expected_intent": "FINANCE"
+  },
+  {
+    "query": "¿Cuándo se paga la nómina y cómo se procesa?",
+    "expected_intent": "FINANCE"
+  },
+  {
+    "query": "Necesito acceso al sistema de nómina para revisar mis deducciones",
+    "expected_intent": "FINANCE"
+  },
+  {
+    "query": "¿Cuál es la política de trabajo remoto e híbrido?",
+    "expected_intent": "HR"
+  },
+  {
+    "query": "Mi laptop tiene malware, ¿qué debo hacer?",
+    "expected_intent": "TECH"
+  },
+  {
+    "query": "¿Cuál es la capital de Francia?",
+    "expected_intent": "UNKNOWN"
+  },
+  {
+    "query": "Necesito comprar software para mi equipo, ¿cómo lo solicito y quién paga?",
+    "expected_intent": "TECH"
+  }
+]
